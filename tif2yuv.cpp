@@ -40,7 +40,7 @@ main(int argc, char* argv[])
 	     
 	     // Defaults to process as 16 bit
 	     unsigned long Half = 32768; // e.g half value 12 bits would have been 2048
-	     unsigned long minCV = 0; //12 bits
+	     unsigned long minCV = 0; //just full range short for use later
 	     unsigned long maxCV = 65535;
 	     short FIR = 1;
 	     short ALPHA = 0; // no alpha channel is default
@@ -343,6 +343,16 @@ main(int argc, char* argv[])
               if(Dz<minCV)Dz=minCV;
               if(Dx>maxCV)Dx=maxCV;
               if(Dx<minCV)Dx=minCV;
+ 
+              if(!FULLRANGE) {
+              Y= (Y<minVR) ? minVR : Y;
+              Dz = (Dz<minVRC) ? minVR : Dz;
+              Dx = (Dx<minVRC) ? minVR : Dx;
+              
+              Y = (Y>maxVR) ? maxVR : Y;
+              Dz = (Dz>maxVRC) ? maxVRC : Dz;
+              Dx = (Dx>maxVRC) ? maxVRC : Dx;
+              }
               //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
               Y4[0][ib] = Y;
               Dz4[0][ib] = Dz;
@@ -400,6 +410,17 @@ main(int argc, char* argv[])
               if(Dz<minCV)Dz=minCV;
               if(Dx>maxCV)Dx=maxCV;
               if(Dx<minCV)Dx=minCV;
+ 
+ 
+              if(!FULLRANGE) {
+              Y= (Y<minVR) ? minVR : Y;
+              Dz = (Dz<minVRC) ? minVR : Dz;
+              Dx = (Dx<minVRC) ? minVR : Dx;
+              
+              Y = (Y>maxVR) ? maxVR : Y;
+              Dz = (Dz>maxVRC) ? maxVRC : Dz;
+              Dx = (Dx>maxVRC) ? maxVRC : Dx;
+              }
            
               Y4[1][ib] = Y;
               Dz4[1][ib] = Dz;
@@ -421,6 +442,7 @@ main(int argc, char* argv[])
               B = (B>maxVR) ? maxVR : B;
                             
               }
+
 
           
  				 if(DXYZ) {	
@@ -457,6 +479,16 @@ main(int argc, char* argv[])
               if(Dz<minCV)Dz=minCV;
               if(Dx>maxCV)Dx=maxCV;
               if(Dx<minCV)Dx=minCV;
+
+              if(!FULLRANGE) {
+              Y= (Y<minVR) ? minVR : Y;
+              Dz = (Dz<minVRC) ? minVR : Dz;
+              Dx = (Dx<minVRC) ? minVR : Dx;
+              
+              Y = (Y>maxVR) ? maxVR : Y;
+              Dz = (Dz>maxVRC) ? maxVRC : Dz;
+              Dx = (Dx>maxVRC) ? maxVRC : Dx;
+              }
              
               Y4[2][ib] = Y;
               Dz4[2][ib] = Dz;
@@ -515,6 +547,15 @@ main(int argc, char* argv[])
               if(Dx>maxCV)Dx=maxCV;
               if(Dx<minCV)Dx=minCV;
 
+              if(!FULLRANGE) {
+              Y= (Y<minVR) ? minVR : Y;
+              Dz = (Dz<minVRC) ? minVR : Dz;
+              Dx = (Dx<minVRC) ? minVR : Dx;
+              
+              Y = (Y>maxVR) ? maxVR : Y;
+              Dz = (Dz>maxVRC) ? maxVRC : Dz;
+              Dx = (Dx>maxVRC) ? maxVRC : Dx;
+              }
               Y4[3][ib] = Y;
               Dz4[3][ib] = Dz;
               Dx4[3][ib] = Dx; 
@@ -593,10 +634,15 @@ main(int argc, char* argv[])
         TIFFClose(tif);
 
     // Subsample =1 means use FIR filter
-    Subsample444to420(Cb444, DzP, arraySizeX, arraySizeY,FIR,minCV,maxCV);
-    Subsample444to420(Cr444, DxP, arraySizeX, arraySizeY,FIR,minCV,maxCV);
     
-    // Write YUV Frame
+	  if(!FULLRANGE) {
+		Subsample444to420(Cb444, DzP, arraySizeX, arraySizeY,FIR,minVRC,maxVRC);
+		Subsample444to420(Cr444, DxP, arraySizeX, arraySizeY,FIR,minVRC,maxVRC);
+	  } else {
+	     Subsample444to420(Cb444, DzP, arraySizeX, arraySizeY,FIR,minCV,maxCV);
+         Subsample444to420(Cr444, DxP, arraySizeX, arraySizeY,FIR,minCV,maxCV);
+      }      
+       // Write YUV Frame
        // write planer output:
         
         // Y

@@ -304,8 +304,14 @@ main(int argc, char* argv[])
 		TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, 1);
 		TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);	
 		
+		
+		if(!FULLRANGE) { // VideoRange
+		Subsample420to444(DzP, Cb444, arraySizeX, arraySizeY, FIR, minVRC,  maxVRC);
+		Subsample420to444(DxP, Cr444, arraySizeX, arraySizeY, FIR, minVRC,  maxVRC);
+		} else { //Fullrange
 		Subsample420to444(DzP, Cb444, arraySizeX, arraySizeY, FIR, minCV,  maxCV);
-		Subsample420to444(DxP, Cr444, arraySizeX, arraySizeY, FIR, minCV,  maxCV);		
+		Subsample420to444(DxP, Cr444, arraySizeX, arraySizeY, FIR, minCV,  maxCV);
+		}  		
 		
 		for (int line = 0;line < arraySizeY;line++)
 		{
@@ -445,7 +451,16 @@ main(int argc, char* argv[])
               Yav = (Yav>maxVR) ? maxVR : Yav;
               Bp = (Bp>maxVR) ? maxVR : Bp;
                             
-              }
+              } else {
+              Rp = (Rp<minCV) ? minCV : Rp;
+              Yav = (Yav<minCV) ? minCV : Yav;
+              Bp = (Bp<minCV) ? minCV : Bp;
+              
+              Rp = (Rp>maxCV) ? maxCV : Rp;
+              Yav = (Yav>maxCV) ? maxCV : Yav;
+              Bp = (Bp>maxCV) ? maxCV : Bp;				  
+		      }
+		      
 
 
            // Calculate Rp from Cr444
