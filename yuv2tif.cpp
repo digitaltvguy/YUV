@@ -238,7 +238,7 @@ main(int argc, char* argv[])
 	 
 	// process yuv
 	int tifNum = 0;  
-	char tifName[] = "tifXYZ/XpYpZp00000.tif";  	
+	char tifName[] = "tifXYZ/XpYpZp000000.tif";  // 6 digits	
 	int line = 0;
 	int pixel = 0;
 	while(yuvIn)
@@ -285,9 +285,9 @@ main(int argc, char* argv[])
 			}
 		}		
 
-		printf("Writing tifXYZ/XpYpZp%05d.tif\n",tifNum);
+		printf("Writing tifXYZ/XpYpZp%06d.tif\n",tifNum);
 		// Open TIF File
-		sprintf(tifName, "tifXYZ/XpYpZp%05d.tif",tifNum);
+		sprintf(tifName, "tifXYZ/XpYpZp%06d.tif",tifNum);
 		invalidPixels = 0;
 		
 		tif = TIFFOpen(tifName, "w");

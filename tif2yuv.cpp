@@ -6,9 +6,16 @@
 #include <fstream>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+
 using namespace std;
 
+double PQ10000_f( double V);
+double PQ10000_r( double L);
+
 void Subsample444to420(unsigned short ** src, unsigned short ** dst, short width, short height, short algorithmn, unsigned long minCV, unsigned long maxCV);
+
+void D2020CL(uint32 Red, uint32 Green, uint32 Blue, uint32 &Luma, long &CrB, long &CrR, short FULLRANGE, short Gamma);
 
 main(int argc, char* argv[])
 {
@@ -29,6 +36,7 @@ main(int argc, char* argv[])
 	     ofstream yuvOut;
 	     short D709 = 0;
 	     short D2020 = 0;
+	     short D2020C = 0;
 	     float tmpF = 0.0;
 	     short HD = 0; // ==1 if 1920x1080 cutout
 	     short qHD = 0; // ==1 if 960x540 cutout
@@ -37,6 +45,7 @@ main(int argc, char* argv[])
 	     short DXYZ = 1;
 	     // Bit Depth
 	     short BD = 12; // 12 bit mode
+	     short Gamma = 10000;
 	     
 	     // Defaults to process as 16 bit
 	     unsigned long Half = 32768; // e.g half value 12 bits would have been 2048
@@ -72,6 +81,7 @@ main(int argc, char* argv[])
 		     		     	     	
 		     if(strcmp(argv[arg],"709")==0)D709 = 1;
 		     if(strcmp(argv[arg],"2020")==0)D2020 = 1;
+		     if(strcmp(argv[arg],"2020C")==0)D2020C = 1;
 		     
 		     if(strcmp(argv[arg],"HD1920")==0)HD = 1;
 		     if(strcmp(argv[arg],"HD960")==0)qHD = 1;
@@ -85,11 +95,24 @@ main(int argc, char* argv[])
 		     	  BD = 14;
         	     printf("\nprocessing line data 14 bits\n");		     	  
 		     }	
-		     
+		     if(strcmp(argv[arg],"G1k")==0){
+				 Gamma = 1;
+				 printf("\nUsing Gamma PQ 1k\n");
+			 }
+		     if(strcmp(argv[arg],"G10k")==0){
+				 Gamma = 10000;
+				 printf("\nUsing Gamma PQ 10k\n");
+			 }
+		     if(strcmp(argv[arg],"G1886")==0){
+				 Gamma = 1886;
+				 printf("\nUsing Gamma Red1886\n");
+			 }
+
 		     if(strcmp(argv[arg],"Y100")==0)Y100 = 1;
 		     if(strcmp(argv[arg],"Y500")==0)Y500 = 1;	
 		     
-		     if(D709 || D2020 || Y100 || Y500)DXYZ = 0;	     
+		     // make sure processing is correct
+		     if(D709 || D2020 || D2020C || Y100 || Y500)DXYZ = 0;	     
 		     
 		     if(strcmp(argv[arg],"-h")==0) {
 		     	 printf("\n ARGS:\n 709 (use Rec709 Color Dif)\n 2020 (use Rec2020 Color Dif)\n HD1920 (cut out center 1920x1080 images)\n HD960 (cut out center 960x540 images)\n (no args get Y'DzDx color difference and 3840x2160 cutout)\n\n\n");
@@ -101,6 +124,10 @@ main(int argc, char* argv[])
 	     }
 	     if(D709)printf("Processing for Rec709\n");
 	     if(D2020)printf("Processing for Rec2020\n");
+	     if(D2020C)printf("Processing for Rec2020 Constant Luminance\n");
+	     if(DXYZ)printf("Processing for YDzDx\n");
+	     if(Y100)printf("Processing for Y100 comp of YDzDx\n");
+	     if(Y500)printf("Processing for Y500 comp of YDzDx\n");
 	     if(HD)printf("Cutting out HD1920x1080\n");
 	     if(qHD)printf("Cutting out HD960x540\n");
 	     if(ALPHA)printf("Assuming TIF has ALPHA channel\n");	  	     	  
@@ -315,7 +342,9 @@ main(int argc, char* argv[])
 	              Dx =  (int)(-((float)G)/2.0 +((float)R)/2.0 +0.5); //(int)((R+1)>>1) - (int)((G+1)>>1); 
 	              //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
 	              
-              } else if(D2020){
+              } else if(D2020C) {
+				  D2020CL(R,G,B, Y, Dz, Dx, FULLRANGE, Gamma); 
+			  } else if(D2020){
               	  tmpF = (0.2627*(float)R + 0.6780*(float)G + 0.0593*(float)B) +0.5;
               	  Y = (uint32)(tmpF);
               	  Dz = (int)((((float)B) - tmpF)/1.8814 + 0.5);
@@ -383,7 +412,9 @@ main(int argc, char* argv[])
 	              Dx =  (int)(-((float)G)/2.0 +((float)R)/2.0 +0.5); //(int)((R+1)>>1) - (int)((G+1)>>1); 
 	              //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
 	              
-              } else if(D2020){
+              } else if(D2020C) {
+				  D2020CL(R,G,B, Y, Dz, Dx, FULLRANGE, Gamma); 
+			  } else if(D2020){
               	  tmpF = (0.2627*(float)R + 0.6780*(float)G + 0.0593*(float)B) +0.5;
               	  Y = (uint32)(tmpF);
               	  Dz = (int)((((float)B) - tmpF)/1.8814 + 0.5);
@@ -452,7 +483,9 @@ main(int argc, char* argv[])
 	              Dx =  (int)(-((float)G)/2.0 +((float)R)/2.0 +0.5); //(int)((R+1)>>1) - (int)((G+1)>>1); 
 	              //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
 	              
-              } else if(D2020){
+              } else if(D2020C) {
+				  D2020CL(R,G,B, Y, Dz, Dx, FULLRANGE, Gamma); 
+			  } else if(D2020){
               	  tmpF = (0.2627*(float)R + 0.6780*(float)G + 0.0593*(float)B) +0.5;
               	  Y = (uint32)(tmpF);
               	  Dz = (int)((((float)B) - tmpF)/1.8814 + 0.5);
@@ -519,7 +552,9 @@ main(int argc, char* argv[])
 	              Dx =  (int)(-((float)G)/2.0 +((float)R)/2.0 +0.5); //(int)((R+1)>>1) - (int)((G+1)>>1); 
 	              //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
 	              
-              } else if(D2020){
+              } else if(D2020C) {
+				  D2020CL(R,G,B, Y, Dz, Dx, FULLRANGE, Gamma); 
+			  } else if(D2020){
               	  tmpF = (0.2627*(float)R + 0.6780*(float)G + 0.0593*(float)B) +0.5;
               	  Y = (uint32)(tmpF);
               	  Dz = (int)((((float)B) - tmpF)/1.8814 + 0.5);
@@ -887,7 +922,154 @@ void Subsample444to420(unsigned short ** src, unsigned short ** dst, short width
 	
 }
 
+void D2020CL(uint32 Red, uint32 Green, uint32 Blue, uint32 &Luma, long &CrB, long &CrR, short FULLRANGE, short Gamma)
+{
 
+  float RedF, GreenF, BlueF,YF,CrBF,CrRF;
+  const float OUT_WP_MAX = 10000.0;
+  const float OUT_WP_10k = 10000.0;
+  const float OUT_WP_1k  = 1000.0;
+  const uint32 CV_BLACK = 4096; //64.0*64.0;
+  const uint32 CV_WHITE = 60160;
+
+  // to full range if needed
+  if(!FULLRANGE)
+  {
+
+	  RedF = (float)(Red - CV_BLACK)/(float)(CV_WHITE-CV_BLACK);
+	  GreenF = (float)(Green - CV_BLACK)/(float)(CV_WHITE-CV_BLACK);
+	  BlueF = (float)(Blue - CV_BLACK)/(float)(CV_WHITE-CV_BLACK);	  
+  } else
+  {
+	  RedF = (float)Red/65535.0;
+	  GreenF = (float)Green/65535.0;
+	  BlueF = (float)Blue/65535.0;
+  }
+  // insure 0.0-1.0
+  RedF = (RedF<0.0) ? 0.0 : RedF;
+  GreenF = (GreenF<0.0) ? 0.0 : GreenF;
+  BlueF = (BlueF<0.0) ? 0.0 : BlueF;
+  
+  RedF = (RedF>1.0) ? 1.0 : RedF;
+  GreenF = (GreenF>1.0) ? 1.0 : GreenF;
+  BlueF = (BlueF>1.0) ? 1.0 : BlueF;  
+  // Now input is full range floating point from 0-1.0
+  
+  // PQ 10k or 1k or 1886
+  // Remove gamma:
+  if (Gamma == 1) { //remove 1k nit PQ gamma
+	  // PQ10000_r(0.1) is OETF value of 1k nits which is max codevalue
+	  RedF = PQ10000_f(PQ10000_r(0.1)*RedF)*OUT_WP_MAX;
+	  GreenF = PQ10000_f(PQ10000_r(0.1)*GreenF)*OUT_WP_MAX;
+	  BlueF = PQ10000_f(PQ10000_r(0.1)*BlueF)*OUT_WP_MAX;
+	  
+	  // make sure not over max
+	  RedF = (RedF>OUT_WP_1k) ? OUT_WP_1k : RedF;
+	  GreenF = (GreenF>OUT_WP_1k) ? OUT_WP_1k : GreenF;
+	  BlueF = (BlueF>OUT_WP_1k) ? OUT_WP_1k : BlueF; 
+  	  
+  } else if (Gamma == 10000) { // remove 10k nit PQ gamma
+	  
+	  RedF = PQ10000_f(RedF)*OUT_WP_MAX;
+	  GreenF = PQ10000_f(GreenF)*OUT_WP_MAX;
+	  BlueF = PQ10000_f(BlueF)*OUT_WP_MAX;
+	  
+	  // make sure not over max
+	  RedF = (RedF>OUT_WP_10k) ? OUT_WP_10k : RedF;
+	  GreenF = (GreenF>OUT_WP_10k) ? OUT_WP_10k : GreenF;
+	  BlueF = (BlueF>OUT_WP_10k) ? OUT_WP_10k : BlueF;
+	  
+  } else {Luma = 65535; return;}
+
+  // Now insure min is not negative
+  RedF = (RedF<0.0) ? 0.0 : RedF;
+  GreenF = (GreenF<0.0) ? 0.0 : GreenF;
+  BlueF = (BlueF<0.0) ? 0.0 : BlueF;
+  
+
+  
+    
+  // compute Y' and apply gamma
+  if (Gamma == 1) {
+     YF = PQ10000_r((0.2627 * RedF + 0.6780 * GreenF + 0.0593 * BlueF)/OUT_WP_MAX)/PQ10000_r(0.1);
+  } else if (Gamma == 10000) {
+	  YF = PQ10000_r((0.2627 * RedF + 0.6780 * GreenF + 0.0593 * BlueF)/OUT_WP_MAX);
+  } else {Luma = 65535; return;}
+
+  // set YF to video range if needed
+  if(!FULLRANGE){
+  YF = (float)(CV_WHITE-CV_BLACK) * YF + CV_BLACK;
+  }  
+
+  // Compute color difference. 
+  // RGB and YF are as-is video range or otherwise
+  float BFmYF = (Blue - YF)/65535.0;
+  float RFmYF = (Red - YF)/65535.0; 
+  
+  // compute chroma with full range only gamma compensated values
+  //Dz = (int)((((float)B) - tmpF)/1.8814 + 0.5);
+  if (BFmYF >= -0.9702 && BFmYF <= 0.0) {
+	CrBF= BFmYF/1.9404;
+  } else if (BFmYF > 0.0 && BFmYF <= 0.7908) {
+	CrBF= BFmYF/1.5816;
+  } else if (BFmYF < -0.9702 ) {
+	CrBF= -0.9702/1.9404;
+  } else if (YF > 0.7908) {
+	CrBF= 0.7908/1.5816;
+  }
+
+
+  //Dx = (int)((((float)R) - tmpF)/1.4746 + 0.5);  
+  if (RFmYF >= -0.8592 && RFmYF <= 0.0) {
+	CrRF= RFmYF/1.7184;
+  } else if (RFmYF > 0.0 && RFmYF <= 0.4968) {
+	CrRF= RFmYF/0.9936;
+  } else if (RFmYF < -0.8592 ) {
+	CrRF= -0.8592/1.7184;
+  } else if (RFmYF > 0.4968) {
+	CrRF= 0.4968/0.9936;
+  }
+
+  // now CrBF, CfRF go from -.5 to +0.5
+  CrBF = CrBF*65535.0;
+  CrRF = CrRF*65535.0;
+  
+
+  
+  // return luma as uint32 and chroma as long
+  Luma = (uint32)(YF+0.5);
+  CrB = (long)(CrBF+0.5);
+  CrR = (long)(CrRF+0.5);
+  return;
+}
+
+
+// 10000 nits
+//  1/gamma-ish, calculate V from Luma
+// decode L = (max(,0)/(c2-c3*V**(1/m)))**(1/n)
+double PQ10000_f( double V)
+{
+  double L;
+  // Lw, Lb not used since absolute Luma used for PQ
+  // formula outputs normalized Luma from 0-1
+  L = pow(std::max(pow(V, 1.0/78.84375) - 0.8359375 ,0.0)/(18.8515625 - 18.6875 * pow(V, 1.0/78.84375)),1.0/0.1593017578);
+
+  return L;
+}
+
+// encode (V^gamma ish calculate L from V)
+//  encode   V = ((c1+c2*Y**n))/(1+c3*Y**n))**m
+double PQ10000_r( double L)
+{
+  double V;
+  // Lw, Lb not used since absolute Luma used for PQ
+  // input assumes normalized luma 0-1
+  V = pow((0.8359375+ 18.8515625*pow((L),0.1593017578))/(1+18.6875*pow((L),0.1593017578)),78.84375);
+  return V;
+}
+ 
+
+		
 
 
 
