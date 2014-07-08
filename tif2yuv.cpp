@@ -122,6 +122,7 @@ main(int argc, char* argv[])
 
 	     arg++;
 	     }
+	     if(DXYZ)printf("Processing for YDzDx with no comp\n");
 	     if(D709)printf("Processing for Rec709\n");
 	     if(D2020)printf("Processing for Rec2020\n");
 	     if(D2020C)printf("Processing for Rec2020 Constant Luminance\n");
@@ -363,8 +364,8 @@ main(int argc, char* argv[])
               	 exit(0);
               }
 
-              Dz = Dz + Half - 1;
-              Dx = Dx + Half - 1;
+              Dz = Dz + Half;
+              Dx = Dx + Half;
               //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
               // clamp to full range                         
               if(Y>maxCV)Y=maxCV;
@@ -433,8 +434,8 @@ main(int argc, char* argv[])
               	 exit(0);
               }
 
-              Dz = Dz + Half - 1;
-              Dx = Dx + Half - 1;
+              Dz = Dz + Half;
+              Dx = Dx + Half;
               // clamp to full range                         
               if(Y>maxCV)Y=maxCV;
               if(Dz>maxCV)Dz=maxCV;
@@ -504,8 +505,8 @@ main(int argc, char* argv[])
               	 exit(0);
               }
 
-              Dz = Dz + Half - 1;
-              Dx = Dx + Half - 1;
+              Dz = Dz + Half;
+              Dx = Dx + Half;
               // clamp to full range                         
               if(Y>maxCV)Y=maxCV;
               if(Dz>maxCV)Dz=maxCV;
@@ -573,8 +574,8 @@ main(int argc, char* argv[])
               	 exit(0);
               }
 
-              Dz = Dz + Half - 1;
-              Dx = Dx + Half - 1;
+              Dz = Dz + Half;
+              Dx = Dx + Half;
               // clamp to full range                         
               if(Y>maxCV)Y=maxCV;
               if(Dz>maxCV)Dz=maxCV;
@@ -979,7 +980,7 @@ void D2020CL(uint32 Red, uint32 Green, uint32 Blue, uint32 &Luma, long &CrB, lon
 	  GreenF = (GreenF>OUT_WP_10k) ? OUT_WP_10k : GreenF;
 	  BlueF = (BlueF>OUT_WP_10k) ? OUT_WP_10k : BlueF;
 	  
-  } else {Luma = 65535; return;}
+  } else {printf("Error unknown gamma\n");Luma = 65535; return;}
 
   // Now insure min is not negative
   RedF = (RedF<0.0) ? 0.0 : RedF;
@@ -994,12 +995,13 @@ void D2020CL(uint32 Red, uint32 Green, uint32 Blue, uint32 &Luma, long &CrB, lon
      YF = PQ10000_r((0.2627 * RedF + 0.6780 * GreenF + 0.0593 * BlueF)/OUT_WP_MAX)/PQ10000_r(0.1);
   } else if (Gamma == 10000) {
 	  YF = PQ10000_r((0.2627 * RedF + 0.6780 * GreenF + 0.0593 * BlueF)/OUT_WP_MAX);
-  } else {Luma = 65535; return;}
+  } else {printf("Error unknown gamma\n");Luma = 65535; return;}
 
   // set YF to video range if needed
   if(!FULLRANGE){
   YF = (float)(CV_WHITE-CV_BLACK) * YF + CV_BLACK;
-  }  
+  } 
+ 
 
   // Compute color difference. 
   // RGB and YF are as-is video range or otherwise
@@ -1034,6 +1036,7 @@ void D2020CL(uint32 Red, uint32 Green, uint32 Blue, uint32 &Luma, long &CrB, lon
   CrBF = CrBF*65535.0;
   CrRF = CrRF*65535.0;
   
+  //if(RedF > 400.0)printf("RedF = %f, YF = %f, Red = %d, CrRF = %f\n",RedF, YF, Red, CrRF);
 
   
   // return luma as uint32 and chroma as long

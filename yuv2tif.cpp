@@ -7,19 +7,18 @@
 #include <fstream>
 #include <stdlib.h>
 #include <string.h>
-
-void Subsample420to444(unsigned short ** src, unsigned short ** dst, short width, short height,short algorithmn,unsigned short minCV, unsigned short maxCV);
+#include <math.h>
 
 using namespace std;
 
+double PQ10000_f( double V);
+double PQ10000_r( double L);
+void Subsample420to444(unsigned short ** src, unsigned short ** dst, short width, short height,short algorithmn,unsigned short minCV, unsigned short maxCV);
+
+void D2020CL(int Luma, unsigned short CrB, unsigned short CrR, int &Red, int &Green, int &Blue, short FULLRANGE, short Gamma, unsigned short Half, unsigned short Full);
+
+
 // Globals
-
-  uint32 R;
-  uint32 G;
-  uint32 B;
-  uint32 A;
-
-  uint32 Y;
   uint32 YnegRMx=0, YnegBMx=0;
   int Yav;
   int YavSave;
@@ -46,6 +45,7 @@ main(int argc, char* argv[])
   // set up to handle inverse color difference
   short D709 = 0;
   short D2020 = 0;
+  short D2020C = 0;
   float tmpF = 0.0;
   short HD = 0; // ==1 if 1920x1080 cutout
   short qHD = 0; // ==1 if 960x540 cutout
@@ -55,6 +55,7 @@ main(int argc, char* argv[])
   short Y100 =0;
   short DXYZ = 1;
   short BD = 12; // 10 bit mode
+  short Gamma = 10000;
   short SR=4;
   unsigned short Half = 2048.0; // e.g half value 12 bits
   unsigned short Full = 4096.0; //  
@@ -93,6 +94,7 @@ main(int argc, char* argv[])
 		     		     
      if(strcmp(argv[arg],"709")==0)D709 = 1;
      if(strcmp(argv[arg],"2020")==0)D2020 = 1;
+     if(strcmp(argv[arg],"2020C")==0)D2020C = 1;
      
      if(strcmp(argv[arg],"HD1920")==0)HD = 1;
      if(strcmp(argv[arg],"HD960")==0)qHD = 1;  
@@ -123,9 +125,25 @@ main(int argc, char* argv[])
   	     printf("\nprocessing line data 14 bits\n");		     	  
      }
      
-     if(D709 || D2020 || Y100 || Y500)DXYZ = 0;	      
+ 		     if(strcmp(argv[arg],"G1k")==0){
+				 Gamma = 1;
+				 printf("\nUsing Gamma PQ 1k\n");
+			 }
+		     if(strcmp(argv[arg],"G10k")==0){
+				 Gamma = 10000;
+				 printf("\nUsing Gamma PQ 10k\n");
+			 }
+		     if(strcmp(argv[arg],"G1886")==0){
+				 Gamma = 1886;
+				 printf("\nUsing Gamma Red1886\n");
+			 }
+ 
+     if(D709 || D2020 || D2020C || Y100 || Y500)DXYZ = 0;	      
      
-     if(strcmp(argv[arg],"-I")==0)IPixF = 1;
+     if(strcmp(argv[arg],"-I")==0){
+		 IPixF = 1;
+		 printf("Invalid Pixel printing enabled\n");
+	 }
      if(strcmp(argv[arg],"-X")==0)XX = 1;
      
      if(strcmp(argv[arg],"-f")==0) {
@@ -135,10 +153,15 @@ main(int argc, char* argv[])
      
    arg++;
   }
-  if(D709)printf("Processing for Rec709\n");
-  if(D2020)printf("Processing for Rec2020\n");
-  if(HD)printf("Processing for HD1920x1080\n");
-  if(qHD)printf("Processing for HD960x540\n");	 
+	 if(DXYZ)printf("Processing for YDzDx with no comp\n");
+	 if(D709)printf("Processing for Rec709\n");
+	 if(D2020)printf("Processing for Rec2020\n");
+	 if(D2020C)printf("Processing for Rec2020 Constant Luminance\n");
+	 if(DXYZ)printf("Processing for YDzDx\n");
+	 if(Y100)printf("Processing for Y100 comp of YDzDx\n");
+	 if(Y500)printf("Processing for Y500 comp of YDzDx\n");
+     if(HD)printf("Processing for HD1920x1080\n");
+     if(qHD)printf("Processing for HD960x540\n");	 
   
   // Set up for video range if needed
   if(!FULLRANGE) {
@@ -357,47 +380,54 @@ main(int argc, char* argv[])
            	 if(Ybar>(Full-1))Ybar=Full-1;          	          	 
            }
        
-
+           // July 6th 2014 changed from (Half-0.5) to Half-1.0 and 
+           // in YDzDx from (Full-1.0) to (Half) done before the multiply by 2
+           // this mirrors what is in tif2yuv where (Half) is added to chroma after calculation
+           // originally had seen something indicating chroma was to +/- 2047.5 but was never sure
+           // how to do that. Looking at rec2020 where everything is integer
+           // with form like 224*chroma+128 
            if(DXYZ) {
            	  if(XX) {
            	  	  //reconstruct with Ybar then scale
            	  	  float RED,BLUE;
-		           RED = (2.0*(float)(Cr444[pixel/numChan][line]) - (float)(Full-1.0) + (float)Ybar) * ((float)Yav)/((float)Ybar); 
-		           BLUE = (2.0*(float)(Cb444[pixel/numChan][line]) - (float)(Full-1.0) + (float)Ybar) * ((float)Yav)/((float)Ybar);
+		           RED = (2.0*((float)(Cr444[pixel/numChan][line]) - (float)(Half)) + (float)Ybar) * ((float)Yav)/((float)Ybar); 
+		           BLUE = (2.0*((float)(Cb444[pixel/numChan][line]) - (float)(Half)) + (float)Ybar) * ((float)Yav)/((float)Ybar);
 		           if(RED>(Full-1.5))RED=Full-1.0;
 		           if(BLUE>(Full-1.5))BLUE=Full-1.0;
 		           Rp = RED;
 		           Bp = BLUE;
 		           
            	  } else {
-		           Rp = ((int)2*(int)(Cr444[pixel/numChan][line]) - (int)(Full-1.0) + Yav); 
-		           Bp = ((int)2*(int)(Cb444[pixel/numChan][line]) - (int)(Full-1.0) + Yav);
+		           Rp = ((int)2*((int)(Cr444[pixel/numChan][line]) - (int)(Half)) + Yav); 
+		           Bp = ((int)2*((int)(Cb444[pixel/numChan][line]) - (int)(Half)) + Yav);
 		        } 
-	        } else if(D2020){
-           	  tmpF = ((float)(Cb444[pixel/numChan][line])-(Half-0.5))*1.8814 + Yav;
+	        } else if (D2020C) {
+				D2020CL((int)(YP[pixel/numChan][line]), Cb444[pixel/numChan][line], Cr444[pixel/numChan][line], Rp, Yav, Bp, FULLRANGE, Gamma, Half, Full);
+			}  else if(D2020){
+           	  tmpF = ((float)(Cb444[pixel/numChan][line])-(Half))*1.8814 + Yav;
            	  if(tmpF > (Full-1.0))tmpF = (Full-1.0);
            	  Bp = tmpF;
-           	  tmpF = ((float)(Cr444[pixel/numChan][line])-(Half-0.5))*1.4746 + Yav;
+           	  tmpF = ((float)(Cr444[pixel/numChan][line])-(Half))*1.4746 + Yav;
            	  if(tmpF > (Full-1.0))tmpF = (Full-1.0);
            	  Rp = tmpF;
            	  tmpF = ((float)Yav - 0.0593*(float)Bp -0.2627*(float)Rp)/0.6780 +0.5 ; // green
            	  if(tmpF > (Full-1.0)) tmpF = (Full-1.0);
            	  Yav = tmpF; //green
            } else if(D709) {
-           	  tmpF = ((float)(Cb444[pixel/numChan][line])-(Half-0.5))*1.8556 + Yav;
+           	  tmpF = ((float)(Cb444[pixel/numChan][line])-(Half))*1.8556 + Yav;
            	  if(tmpF > (Full-1.0))tmpF = (Full-1.0);
            	  Bp = tmpF;           	  
-           	  tmpF = ((float)(Cr444[pixel/numChan][line])-(Half-0.5))*1.5748 + Yav;
+           	  tmpF = ((float)(Cr444[pixel/numChan][line])-(Half))*1.5748 + Yav;
            	  if(tmpF > (Full-1.0))tmpF = (Full-1.0);
            	  Rp = tmpF;           	  
            	  tmpF = ((float)Yav - 0.07222*(float)Bp -0.2126*(float)Rp)/0.7152 +0.5 ; // green
            	  if(tmpF > (Full-1.0)) tmpF = (Full-1.0);
            	  Yav = tmpF;  //green         	                	
            } else if(Y100 || Y500) {
-	           	  tmpF = ((float)(Cb444[pixel/numChan][line])-(Half-0.5))*W + ((float)Yav)*V;
+	           	  tmpF = ((float)(Cb444[pixel/numChan][line])-(Half))*W + ((float)Yav)*V;
 	           	  if(tmpF > (Full-1.0))tmpF = (Full-1.0);
 	           	  Bp = tmpF;
-	           	  tmpF = ((float)(Cr444[pixel/numChan][line])-(Half-0.5))*U + ((float)Yav)*T;
+	           	  tmpF = ((float)(Cr444[pixel/numChan][line])-(Half))*U + ((float)Yav)*T;
 	           	  if(tmpF > (Full-1.0))tmpF = (Full-1.0);
 	           	  Rp = tmpF; 
            } else {
@@ -407,14 +437,16 @@ main(int argc, char* argv[])
            
            if(Yav < 0)
            {
+
+           		if(IPixF)invPix << "Pixel=" << pixel/8 << ", " << line << "  Y'=" << YavSave << "  Dz=" << Cb444[pixel/numChan][line] << "  Dx=" << Cr444[pixel/numChan][line] << "  G'=" << Yav << " !! Gneg\n";
+           		
            		Yav = 0;
            		invalidPixels++;
-           		if(IPixF)invPix << "Pixel=" << pixel/8 << ", " << line << "  Y'=" << YavSave << "  Dz=" << Cb444[pixel/numChan][line] << "  Dx=" << Cr444[pixel/numChan][line] << "  G'=" << Yav << " !! Gneg\n";
            }        
         
            if(Rp < 0 )
            {
-           	
+           	   //if(IPixF && YavSave>0)
            	   if(IPixF && YavSave>0)invPix << "Pixel=" << pixel/8 << ", " << line << "  Y'=" << YavSave << "  Dz=" << Cb444[pixel/numChan][line] << "  Dx=" << Cr444[pixel/numChan][line] << "  R'=" << Rp << " !! Rneg\n";
            	   
            		if(Yav > YnegRMx && Yav > 0)
@@ -428,7 +460,7 @@ main(int argc, char* argv[])
            
            if(Bp < 0 )
            {
-           	
+           	   //if(IPixF && YavSave>0)
            	   if(IPixF && YavSave>0)invPix << "Pixel=" << pixel/8 << ", " << line << "  Y'=" << YavSave << "  Dz=" << Cb444[pixel/numChan][line] << "  Dx=" << Cr444[pixel/numChan][line] << "  B'=" << Bp << " !! Bneg\n";
            	
            		if(Yav > YnegBMx && Yav > 0)
@@ -629,3 +661,154 @@ void Subsample420to444(unsigned short ** src, unsigned short ** dst, short width
   }
 
 }
+
+
+void D2020CL(int Luma, unsigned short CrB, unsigned short CrR, int &Red, int &Green, int &Blue, short FULLRANGE, short Gamma, unsigned short Half, unsigned short Full)
+{
+	
+  const float OUT_WP_MAX = 10000.0;
+  const float OUT_WP_10k = 10000.0;
+  const float OUT_WP_1k  = 1000.0;
+  const uint32 CV_BLACK = 4096; //64.0*64.0;
+  const uint32 CV_WHITE = 60160;
+  	
+	// CrB and CrR to be sent in as unsigned short from 444 array
+	// Luma to be sent in as codevalue range
+	
+	// Recover Blue and Red
+	float CrBF = (float)CrB - (Half);
+	if(CrBF <= 0.0) {
+		CrBF = CrBF * 1.9404;
+	}
+    else {
+		CrBF = CrBF * 1.5816;
+	}
+	CrBF = CrBF + (float)Luma; // B' = CrB' + Y'
+	CrBF = (CrBF<0.0) ? 0.0 : CrBF;
+	CrBF = (CrBF>(Full-1.0)) ? (Full-1.0) : CrBF;
+	
+	float CrRF = (float)CrR - (Half);
+	if(CrRF <= 0.0) {
+		CrRF = CrRF * 1.7184;
+	}
+    else {
+		CrRF = CrRF * 0.9936;
+	}
+	
+	CrRF = CrRF + (float)Luma;
+	CrRF = (CrRF<0.0) ? 0.0 : CrRF;
+	CrRF = (CrRF>(Full-1.0)) ? (Full-1.0) : CrRF;	
+	
+	// now CrBF is Blue' and CrRF is Red'
+	// set return integer values
+	Red = (int)(CrRF+0.5);
+	Blue = (int)(CrBF+0.5);
+	
+	
+	// Recover Green:
+	// set Luma, Blue and Red to FULLRANGE 0-1
+	  float LumaF = (float)Luma/(Full-1.0);
+	  CrRF  = CrRF/(Full-1.0);
+	  CrBF  = CrBF/(Full-1.0);
+
+	if(!FULLRANGE) {
+	  LumaF = (LumaF - CV_BLACK/65535.0)*(65535.0/(CV_WHITE-CV_BLACK));
+	  CrRF = (CrRF - CV_BLACK/65535.0)*(65535.0/(CV_WHITE-CV_BLACK));
+	  CrBF = (CrBF - CV_BLACK/65535.0)*(65535.0/(CV_WHITE-CV_BLACK));	  	  
+	}
+	
+	// insure nothing outside 0-1
+	// CrRF, CrBF are Red, Blue with Gamma
+	LumaF = (LumaF<0.0) ? 0.0 : LumaF;
+	LumaF = (LumaF>1.0) ? 1.0 : LumaF;	 
+	CrRF = (CrRF<0.0) ? 0.0 : CrRF;
+	CrRF = (CrRF>1.0) ? 1.0 : CrRF;	
+	CrBF = (CrBF<0.0) ? 0.0 : CrBF;
+	CrBF = (CrBF>1.0) ? 1.0 : CrBF;	
+	
+			
+	// remove gamma on Luma, remove gamma on Blue and Red
+    // PQ 10k or 1k or 1886
+    // Remove gamma:
+  if (Gamma == 1) { //remove 1k nit PQ gamma
+	  // PQ10000_r(0.1) is OETF value of 1k nits which is max codevalue
+	  CrRF = PQ10000_f(PQ10000_r(0.1)*CrRF)*OUT_WP_MAX;
+	  LumaF = PQ10000_f(PQ10000_r(0.1)*LumaF)*OUT_WP_MAX;
+	  CrBF = PQ10000_f(PQ10000_r(0.1)*CrBF)*OUT_WP_MAX;
+	  
+	  // make sure not over max
+	  CrRF = (CrRF>OUT_WP_1k) ? OUT_WP_1k : CrRF;
+	  LumaF = (LumaF>OUT_WP_1k) ? OUT_WP_1k : LumaF;
+	  CrBF = (CrBF>OUT_WP_1k) ? OUT_WP_1k : CrBF; 
+  	  
+  } else if (Gamma == 10000) { // remove 10k nit PQ gamma
+	  
+	  CrRF = PQ10000_f(CrRF)*OUT_WP_MAX;
+	  LumaF = PQ10000_f(LumaF)*OUT_WP_MAX;
+	  CrBF = PQ10000_f(CrBF)*OUT_WP_MAX;
+	  
+	  // make sure not over max
+	  CrRF = (CrRF>OUT_WP_10k) ? OUT_WP_10k : CrRF;
+	  LumaF = (LumaF>OUT_WP_10k) ? OUT_WP_10k : LumaF;
+	  CrBF = (CrBF>OUT_WP_10k) ? OUT_WP_10k : CrBF;
+	  
+  } else {printf("Error unknown gamma\n");Green = 65535; return;}	
+	
+	
+	
+	// recover Green
+	float GreenF = (LumaF - 0.0593*CrBF -0.2627*CrRF)/0.6780; 
+	if(GreenF < 0 && LumaF > 50.0) {
+		//printf("LumaF: %f, CrBF: %f, CrRF: %f, GreenF: %f, CrR = %d, Luma = %d\n",LumaF,CrBF, CrRF, GreenF, CrR, Luma);
+		GreenF = 0.0;
+	}
+	
+	// apply gamma to Green
+	if (Gamma == 1) {
+       GreenF = PQ10000_r(GreenF/OUT_WP_MAX)/PQ10000_r(0.1);
+    } else if (Gamma == 10000) {
+	   GreenF = PQ10000_r(GreenF/OUT_WP_MAX);
+    } else {printf("Error unknown gamma\n");Green = 65535; return;}
+
+   // set Green to video range if needed
+   if(!FULLRANGE){
+     // set Green to Video Range from 0-1 full range
+     // float to integer round
+	 GreenF = GreenF *((CV_WHITE-CV_BLACK)/65535.0) + CV_BLACK/65535.0;
+	 Green  = (int)(GreenF*(Full-1.0)+0.5);    
+   }  else {
+	 // set Green to Full Range
+	 // float to integer round
+	 Green = (int)((Full- 1.0) * GreenF +0.5);
+   }
+
+	
+	
+	return;
+}
+
+// 10000 nits
+//  1/gamma-ish, calculate V from Luma
+// decode L = (max(,0)/(c2-c3*V**(1/m)))**(1/n)
+double PQ10000_f( double V) // EOTF
+{
+  double L;
+  // Lw, Lb not used since absolute Luma used for PQ
+  // formula outputs normalized Luma from 0-1
+  L = pow(std::max(pow(V, 1.0/78.84375) - 0.8359375 ,0.0)/(18.8515625 - 18.6875 * pow(V, 1.0/78.84375)),1.0/0.1593017578);
+
+  return L;
+}
+
+// encode (V^gamma ish calculate L from V)
+//  encode   V = ((c1+c2*Y**n))/(1+c3*Y**n))**m
+double PQ10000_r( double L) // OETF
+{
+  double V;
+  // Lw, Lb not used since absolute Luma used for PQ
+  // input assumes normalized luma 0-1
+  V = pow((0.8359375+ 18.8515625*pow((L),0.1593017578))/(1+18.6875*pow((L),0.1593017578)),78.84375);
+  return V;
+}
+ 
+
