@@ -758,7 +758,7 @@ void D2020CL(int Luma, unsigned short CrB, unsigned short CrR, int &Red, int &Gr
 	
 	// recover Green
 	float GreenF = (LumaF - 0.0593*CrBF -0.2627*CrRF)/0.6780; 
-	if(GreenF < 0 && LumaF > 50.0) {
+	if(GreenF < 0.0 ) {
 		//printf("LumaF: %f, CrBF: %f, CrRF: %f, GreenF: %f, CrR = %d, Luma = %d\n",LumaF,CrBF, CrRF, GreenF, CrR, Luma);
 		GreenF = 0.0;
 	}
