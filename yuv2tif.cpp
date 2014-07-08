@@ -1,5 +1,3 @@
-// set up for 12 bits 
-// ASSUMES 3840x2160 ONLY
 
 
 #include <tiffio.h>
