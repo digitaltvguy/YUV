@@ -31,6 +31,7 @@ main(int argc, char* argv[])
         uint32 pixel;
         uint32 pixelStart;
         uint32 ib;
+        int argYUV=9999;
         short  numStrips;
         short  stripStart;
 	     ofstream yuvOut;
@@ -69,7 +70,7 @@ main(int argc, char* argv[])
 	     
 	     //Process Args:
 	     short arg = 2;
-	     while(arg < argc) {
+	     while(arg < argc) {			 
 	     	
 		     if(strcmp(argv[arg],"BOX")==0)FIR = 0;
 		     if(strcmp(argv[arg],"FULL")==0)FULLRANGE = 1;
@@ -118,6 +119,11 @@ main(int argc, char* argv[])
 		     	 printf("\n ARGS:\n 709 (use Rec709 Color Dif)\n 2020 (use Rec2020 Color Dif)\n HD1920 (cut out center 1920x1080 images)\n HD960 (cut out center 960x540 images)\n (no args get Y'DzDx color difference and 3840x2160 cutout)\n\n\n");
 		     	 exit(0);
 		     }
+		     
+		     if(strcmp(argv[arg],"-o")==0) {
+					arg++;
+					argYUV=arg;		     	
+		     }		     
 	     
 
 	     arg++;
@@ -272,9 +278,13 @@ main(int argc, char* argv[])
        Line =  (unsigned short*) malloc(arraySizeX*sizeof(unsigned short));
 
 		  // Open Binary PlanarYUV file for writing:
-	     yuvOut.open("YDzDx.yuv", ios::ate | ios::app | ios::out | ios::binary);
-	     printf("Opened YDzDx.yuv to file end and appending:\n");
-	     
+		 if (argYUV == 9999) {
+	        yuvOut.open("YDzDx.yuv", ios::ate | ios::app | ios::out | ios::binary);
+	        printf("Opened YDzDx.yuv to file end and appending:\n");
+	     } else {
+	        yuvOut.open(argv[argYUV], ios::ate | ios::app | ios::out | ios::binary);
+	        printf("Opened %s to file end and appending:\n", argv[argYUV]);
+	     }	     
 	     // Reduce numStrips to what is needed to center cut:
 	     numStrips = numStrips - stripStart;
     
